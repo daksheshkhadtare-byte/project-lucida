@@ -10,13 +10,89 @@ export function useHighlighter(tokens, settings) {
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [isReading, setIsReading] = useState(false);
 
-  const speed = settings.highlightSpeed;
+  const speed = settings.highlightSpeed ?? 1500;
 
   const validTokens = tokens.filter(t => !t.isParagraph);
 
+  const isAutoPlayingRef = useRef(isAutoPlaying);
+  isAutoPlayingRef.current = isAutoPlaying;
+
+  const isReadingRef = useRef(isReading);
+  isReadingRef.current = isReading;
+
+  // Text-to-Speech logic
+  const currentWord = currentIndex >= 0 && currentIndex < validTokens.length ? validTokens[currentIndex].word : null;
+  const isSpeechEnabled = settings.isSpeechEnabled;
+  const speechRate = settings.speechRate ?? 0.9;
+  
+  useEffect(() => {
+    if (!isSpeechEnabled || !currentWord) return;
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(currentWord);
+    utterance.rate = speechRate;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    
+    if (settings.speechVoice) {
+      const voices = window.speechSynthesis.getVoices();
+      const selectedVoice = voices.find(v => v.name === settings.speechVoice);
+      if (selectedVoice) utterance.voice = selectedVoice;
+    }
+
+    utterance.onend = () => {
+      if (isAutoPlayingRef.current) {
+        const gap = Math.max(0, speed - 1000);
+        setTimeout(() => {
+          if (!isAutoPlayingRef.current) return;
+          setCurrentIndex(i => {
+            if (i >= validTokens.length - 1) {
+              setIsAutoPlaying(false);
+              setCompleted(true);
+              setIsReading(false);
+              return i;
+            }
+            if (!isReadingRef.current) setIsReading(true);
+            return i + 1;
+          });
+        }, gap);
+      }
+    };
+
+    utterance.onerror = () => {
+      if (isAutoPlayingRef.current) {
+        setTimeout(() => {
+          if (!isAutoPlayingRef.current) return;
+          setCurrentIndex(i => {
+            if (i >= validTokens.length - 1) {
+              setIsAutoPlaying(false);
+              setCompleted(true);
+              setIsReading(false);
+              return i;
+            }
+            if (!isReadingRef.current) setIsReading(true);
+            return i + 1;
+          });
+        }, speed);
+      }
+    };
+
+    window.speechSynthesis.speak(utterance);
+  }, [currentIndex, isSpeechEnabled]); // deliberate dependency array per requirements
+
+  useEffect(() => {
+    return () => {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  // Auto-advance interval (only used when speech is OFF)
   useEffect(() => {
     let interval = null;
-    if (isAutoPlaying && !completed && validTokens.length > 0) {
+    if (isAutoPlaying && !completed && validTokens.length > 0 && !isSpeechEnabled) {
       interval = setInterval(() => {
         setCurrentIndex(prev => {
           if (prev >= validTokens.length - 1) {
@@ -33,7 +109,7 @@ export function useHighlighter(tokens, settings) {
       }, speed);
     }
     return () => clearInterval(interval);
-  }, [isAutoPlaying, completed, speed, validTokens.length, isReading]);
+  }, [isAutoPlaying, completed, speed, validTokens.length, isReading, isSpeechEnabled]);
 
   // Reading Timer
   useEffect(() => {
@@ -72,7 +148,6 @@ export function useHighlighter(tokens, settings) {
   };
 
   const jumpTo = (index) => {
-    // index here is the index in validTokens
     setCurrentIndex(index);
     setCompleted(false);
     if (!isReading) setIsReading(true);

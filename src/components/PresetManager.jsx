@@ -97,7 +97,7 @@ export default function PresetManager({ settings, onLoadPreset, presets, setPres
   const allPresets = [...builtInPresets, ...presets];
 
   return (
-    <div className="card">
+    <div className="card" id="presets-card">
       <h3>Presets</h3>
       
       <div style={{ display: 'flex', gap: '5px', marginBottom: '5px' }}>

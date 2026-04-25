@@ -16,7 +16,7 @@ export default function ReadingStats({ highlighter }) {
   };
 
   return (
-    <div className="card">
+    <div className="card" id="reading-stats-card">
       <h3>Reading Stats</h3>
       <div className="stats-grid">
         <div className="stat-box">
