@@ -42,7 +42,7 @@ function App() {
     toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
   };
 
-  const highlighter = useHighlighter(tokens, settings, speechControls.speak, speechControls.isSpeechEnabled);
+  const highlighter = useHighlighter(tokens, settings, speechControls.speak, speechControls.isSpeechEnabled, speechControls);
 
   useEffect(() => {
     applySettings(settings);

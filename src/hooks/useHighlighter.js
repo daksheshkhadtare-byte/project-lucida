@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export function useHighlighter(tokens, settings, speak, isSpeechEnabled) {
+export function useHighlighter(tokens, settings, speak, isSpeechEnabled, speechControls = {}) {
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [completed, setCompleted] = useState(false);
@@ -17,38 +17,53 @@ export function useHighlighter(tokens, settings, speak, isSpeechEnabled) {
   
   const currentWord = currentIndex >= 0 && currentIndex < words.length ? words[currentIndex].word : null;
 
-  // Auto-advance interval synced with speech
+  const { speechRate, speechPitch, speechVolume, selectedVoiceName } = speechControls;
+
+  // 1) Pure Timer Auto-Advance
   useEffect(() => {
     if (!isAutoPlaying || !words || words.length === 0) return;
 
-    const currentWord = words[currentIndex]?.word;
-
-    if (isSpeechEnabled && currentWord && currentWord !== '\n\n') {
-      speak(currentWord, () => {
-        setCurrentIndex(prev => {
-          if (prev >= words.length - 1) {
-            setIsAutoPlaying(false);
-            return prev;
-          }
-          return prev + 1;
-        });
+    const timer = setTimeout(() => {
+      setCurrentIndex(prev => {
+        if (prev >= words.length - 1) {
+          setIsAutoPlaying(false);
+          return prev;
+        }
+        return prev + 1;
       });
-      return () => {
-        if (window.speechSynthesis) window.speechSynthesis.cancel();
-      };
-    } else {
-      const timer = setTimeout(() => {
-        setCurrentIndex(prev => {
-          if (prev >= words.length - 1) {
-            setIsAutoPlaying(false);
-            return prev;
-          }
-          return prev + 1;
-        });
-      }, highlightSpeed || 1500);
-      return () => clearTimeout(timer);
+    }, highlightSpeed || 1500);
+
+    return () => clearTimeout(timer);
+
+  }, [isAutoPlaying, currentIndex, highlightSpeed, words]);
+
+  // 2) Independent Speech Effect
+  useEffect(() => {
+    if (!isSpeechEnabled || !words || words.length === 0) return;
+    const currentWordToSpeak = words[currentIndex]?.word;
+    if (!currentWordToSpeak || currentWordToSpeak === '\n\n') return;
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(currentWordToSpeak);
+    utterance.rate = speechRate || 0.85;
+    utterance.pitch = speechPitch || 1.0;
+    utterance.volume = speechVolume || 1.0;
+
+    if (selectedVoiceName) {
+      const voices = window.speechSynthesis.getVoices();
+      const voice = voices.find(v => v.name === selectedVoiceName);
+      if (voice) utterance.voice = voice;
     }
-  }, [isAutoPlaying, currentIndex, isSpeechEnabled, highlightSpeed, words, speak]);
+
+    setTimeout(() => {
+      window.speechSynthesis.speak(utterance);
+    }, 50);
+
+    return () => {
+      window.speechSynthesis.cancel();
+    };
+  }, [currentIndex, isSpeechEnabled, words, speechRate, speechPitch, speechVolume, selectedVoiceName]);
 
   // Reading Timer
   useEffect(() => {
