@@ -1,55 +1,31 @@
 import React, { useState, useEffect } from 'react';
 
-export default function HighlightControls({ highlighter, settings, setSetting, selectedVoice, setSelectedVoice }) {
+export default function HighlightControls({ highlighter, settings, setSetting }) {
   const {
-    currentIndex, isAutoPlaying, completed,
+    currentIndex, currentWord, isAutoPlaying, completed,
     next, prev, toggleAutoPlay, totalValidTokens
   } = highlighter;
 
-  const [voices, setVoices] = useState([]);
+  const [speechOn, setSpeechOn] = useState(false);
+  const [speechRate, setSpeechRate] = useState(0.9);
 
-  useEffect(() => {
-    const loadVoices = () => {
-      const availableVoices = window.speechSynthesis.getVoices();
-      const englishVoices = availableVoices.filter(v => v.lang.startsWith('en'));
-      setVoices(englishVoices);
-      
-      if (!settings.speechVoice && englishVoices.length > 0) {
-        setSetting('speechVoice', englishVoices[0].name);
-      }
-      
-      if (!selectedVoice && englishVoices.length > 0) {
-        const initialVoice = englishVoices.find(v => v.name === settings.speechVoice) || englishVoices[0];
-        setSelectedVoice(initialVoice);
-      }
-    };
-    
-    // Call once in case they are already loaded
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-    
-    return () => {
-      window.speechSynthesis.onvoiceschanged = null;
-    };
-  }, [settings.speechVoice, setSetting]);
-
-  const handleVoiceChange = (e) => {
-    const selectedVoiceName = e.target.value;
-    setSetting('speechVoice', selectedVoiceName);
-    const newVoice = voices.find(v => v.name === selectedVoiceName);
-    setSelectedVoice(newVoice);
-    if (window.speechSynthesis) {
+  const speak = (word) => {
+    try {
       window.speechSynthesis.cancel();
-    }
+      const msg = new SpeechSynthesisUtterance(word);
+      msg.rate = speechRate;
+      msg.lang = 'en-US';
+      window.speechSynthesis.speak(msg);
+    } catch(e) {}
   };
 
-  const progress = totalValidTokens > 0 ? ((currentIndex + 1) / totalValidTokens) * 100 : 0;
+  useEffect(() => {
+    if (speechOn && currentWord) speak(currentWord);
+  }, [currentIndex, speechOn]);
 
+  const progress = totalValidTokens > 0 ? ((currentIndex + 1) / totalValidTokens) * 100 : 0;
   const speedProgress = (((settings.highlightSpeed ?? 1500) - 500) / (4000 - 500)) * 100;
   const highlightSpeedBg = `linear-gradient(to right, #a78bfa ${speedProgress}%, #2a2a4a ${speedProgress}%)`;
-  
-  const speechRateProgress = (((settings.speechRate ?? 0.9) - 0.5) / (1.5 - 0.5)) * 100;
-  const speechRateBg = `linear-gradient(to right, #a78bfa ${speechRateProgress}%, #2a2a4a ${speechRateProgress}%)`;
 
   return (
     <div className="card" id="highlight-card">
@@ -98,58 +74,47 @@ export default function HighlightControls({ highlighter, settings, setSetting, s
           </>
         )}
 
-        <hr style={{ border: 'none', borderTop: '1px solid #2a2a4a', margin: '15px 0' }} />
-
-        <div className="toggle-container">
-          <label className="toggle-switch">
-            <input 
-              type="checkbox" 
-              checked={settings.isSpeechEnabled} 
-              onChange={(e) => {
-                setSetting('isSpeechEnabled', e.target.checked);
-                if (!e.target.checked) window.speechSynthesis.cancel();
-              }} 
-            />
-            <span className="toggle-slider"></span>
-          </label>
-          <span className="toggle-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className={settings.isSpeechEnabled ? 'pulsing-speaker' : ''}>🔊</span> Speak Words Aloud
-          </span>
-        </div>
-
-        {settings.isSpeechEnabled && (
-          <div style={{ marginTop: '15px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-            <div className="slider-group">
-              <div className="slider-header">
-                <label className="slider-label" htmlFor="speech-rate">Speech Rate: {(settings.speechRate ?? 0.9).toFixed(1)}x</label>
+        <div style={{marginTop:'16px', borderTop:'1px solid #2a2a4a', paddingTop:'16px'}}>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px'}}>
+            <span style={{color:'#e2e2f0', fontSize:'14px'}}>🔊 Speak Words Aloud</span>
+            <label style={{position:'relative', display:'inline-block', width:'44px', height:'24px'}}>
+              <input
+                type="checkbox"
+                checked={speechOn}
+                onChange={(e) => {
+                  window.speechSynthesis.cancel();
+                  setSpeechOn(e.target.checked);
+                }}
+                style={{opacity:0, width:0, height:0}}
+              />
+              <span style={{
+                position:'absolute', cursor:'pointer', top:0, left:0, right:0, bottom:0,
+                backgroundColor: speechOn ? '#7c6af7' : '#2a2a4a',
+                borderRadius:'24px', transition:'0.3s'
+              }}>
+                <span style={{
+                  position:'absolute', height:'18px', width:'18px', left: speechOn ? '23px' : '3px',
+                  bottom:'3px', backgroundColor:'white', borderRadius:'50%', transition:'0.3s'
+                }}/>
+              </span>
+            </label>
+          </div>
+          {speechOn && (
+            <div>
+              <div style={{display:'flex', justifyContent:'space-between', marginBottom:'6px'}}>
+                <span style={{color:'#a0a0c0', fontSize:'13px'}}>Speech Rate</span>
+                <span style={{color:'#e2e2f0', fontSize:'13px'}}>{speechRate}x</span>
               </div>
-              <input 
-                id="speech-rate"
-                type="range" min="0.5" max="1.5" step="0.1" 
-                value={settings.speechRate ?? 0.9} 
-                onChange={(e) => setSetting('speechRate', parseFloat(e.target.value))}
-                style={{ background: speechRateBg }}
-                aria-label="Speech Rate slider"
+              <input
+                type="range"
+                min="0.5" max="1.5" step="0.1"
+                value={speechRate}
+                onChange={(e) => setSpeechRate(parseFloat(e.target.value))}
+                style={{width:'100%'}}
               />
             </div>
-
-            <div>
-              <label className="slider-label" style={{ display: 'block', marginBottom: '5px' }}>Voice</label>
-              <select 
-                value={settings.speechVoice || ''} 
-                onChange={handleVoiceChange}
-                style={{
-                  width: '100%', padding: '8px', background: '#0f0f1a', color: '#e2e2f0', 
-                  border: '1px solid #2a2a4a', borderRadius: '4px', fontFamily: 'inherit'
-                }}
-              >
-                {voices.map(v => (
-                  <option key={v.name} value={v.name}>{v.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
 
         <hr style={{ border: 'none', borderTop: '1px solid #2a2a4a', margin: '15px 0' }} />
 

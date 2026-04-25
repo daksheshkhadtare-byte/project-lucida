@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
-export function useHighlighter(tokens, settings, selectedVoice) {
+export function useHighlighter(tokens, settings) {
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [completed, setCompleted] = useState(false);
@@ -13,84 +13,13 @@ export function useHighlighter(tokens, settings, selectedVoice) {
   const speed = settings.highlightSpeed ?? 1500;
 
   const validTokens = tokens.filter(t => !t.isParagraph);
-
-  const isAutoPlayingRef = useRef(isAutoPlaying);
-  isAutoPlayingRef.current = isAutoPlaying;
-
-  const isReadingRef = useRef(isReading);
-  isReadingRef.current = isReading;
-
-  // Text-to-Speech logic
-  const currentWord = currentIndex >= 0 && currentIndex < validTokens.length ? validTokens[currentIndex].word : null;
-  const isSpeechEnabled = settings.isSpeechEnabled;
-  const speechRate = settings.speechRate ?? 0.9;
   
-  useEffect(() => {
-    if (!isSpeechEnabled || !currentWord) return;
-    if (!window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    
-    const utterance = new SpeechSynthesisUtterance(currentWord);
-    utterance.rate = speechRate;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
-    
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
-    }
+  const currentWord = currentIndex >= 0 && currentIndex < validTokens.length ? validTokens[currentIndex].word : null;
 
-    utterance.onend = () => {
-      if (isAutoPlayingRef.current) {
-        const gap = Math.max(0, speed - 1000);
-        setTimeout(() => {
-          if (!isAutoPlayingRef.current) return;
-          setCurrentIndex(i => {
-            if (i >= validTokens.length - 1) {
-              setIsAutoPlaying(false);
-              setCompleted(true);
-              setIsReading(false);
-              return i;
-            }
-            if (!isReadingRef.current) setIsReading(true);
-            return i + 1;
-          });
-        }, gap);
-      }
-    };
-
-    utterance.onerror = () => {
-      if (isAutoPlayingRef.current) {
-        setTimeout(() => {
-          if (!isAutoPlayingRef.current) return;
-          setCurrentIndex(i => {
-            if (i >= validTokens.length - 1) {
-              setIsAutoPlaying(false);
-              setCompleted(true);
-              setIsReading(false);
-              return i;
-            }
-            if (!isReadingRef.current) setIsReading(true);
-            return i + 1;
-          });
-        }, speed);
-      }
-    };
-
-    window.speechSynthesis.speak(utterance);
-  }, [currentIndex, isSpeechEnabled]); // deliberate dependency array per requirements
-
-  useEffect(() => {
-    return () => {
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
-    };
-  }, []);
-
-  // Auto-advance interval (only used when speech is OFF)
+  // Auto-advance interval
   useEffect(() => {
     let interval = null;
-    if (isAutoPlaying && !completed && validTokens.length > 0 && !isSpeechEnabled) {
+    if (isAutoPlaying && !completed && validTokens.length > 0) {
       interval = setInterval(() => {
         setCurrentIndex(prev => {
           if (prev >= validTokens.length - 1) {
@@ -107,7 +36,7 @@ export function useHighlighter(tokens, settings, selectedVoice) {
       }, speed);
     }
     return () => clearInterval(interval);
-  }, [isAutoPlaying, completed, speed, validTokens.length, isReading, isSpeechEnabled]);
+  }, [isAutoPlaying, completed, speed, validTokens.length, isReading]);
 
   // Reading Timer
   useEffect(() => {
@@ -170,6 +99,7 @@ export function useHighlighter(tokens, settings, selectedVoice) {
 
   return {
     currentIndex,
+    currentWord,
     isAutoPlaying,
     completed,
     next,
