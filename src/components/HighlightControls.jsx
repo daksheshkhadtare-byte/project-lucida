@@ -97,9 +97,7 @@ export default function HighlightControls({ highlighter, settings, setSetting, s
                 onChange={(e) => toggleSpeech(e.target.checked)}
                 aria-label="Toggle speech"
               />
-              <span className="toggle-track">
-                <span className="toggle-thumb"/>
-              </span>
+              <span className="toggle-slider"></span>
             </label>
           </div>
 

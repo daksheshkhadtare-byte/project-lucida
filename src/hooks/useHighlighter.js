@@ -19,51 +19,36 @@ export function useHighlighter(tokens, settings, speak, isSpeechEnabled) {
 
   // Auto-advance interval synced with speech
   useEffect(() => {
-    if (!isAutoPlaying || words.length === 0) return;
+    if (!isAutoPlaying || !words || words.length === 0) return;
 
-    let cancelled = false;
+    const currentWord = words[currentIndex]?.word;
 
-    const advanceWord = () => {
-      if (cancelled) return;
-
-      setCurrentIndex(prev => {
-        if (prev >= words.length - 1) {
-          setIsAutoPlaying(false);
-          setCompleted(true);
-          setIsReading(false);
-          return prev;
-        }
-        if (prev === -1 && !isReading) {
-          setIsReading(true);
-        }
-        return prev + 1;
+    if (isSpeechEnabled && currentWord && currentWord !== '\n\n') {
+      speak(currentWord, () => {
+        setCurrentIndex(prev => {
+          if (prev >= words.length - 1) {
+            setIsAutoPlaying(false);
+            return prev;
+          }
+          return prev + 1;
+        });
       });
-    };
-
-    const currentWordToSpeak = words[currentIndex]?.word;
-
-    if (isSpeechEnabled && currentWordToSpeak && currentWordToSpeak !== '\n\n') {
-      // SPEECH MODE: speak word first, advance only after speech ends
-      speak(currentWordToSpeak, () => {
-        if (!cancelled) {
-          // Add a small gap between words based on user interval setting
-          const gap = Math.max(50, (highlightSpeed - 800));
-          setTimeout(advanceWord, gap);
-        }
-      });
-    } else {
-      // TIMER MODE: advance on fixed interval when speech is off
-      const timer = setTimeout(advanceWord, highlightSpeed);
       return () => {
-        cancelled = true;
-        clearTimeout(timer);
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
       };
+    } else {
+      const timer = setTimeout(() => {
+        setCurrentIndex(prev => {
+          if (prev >= words.length - 1) {
+            setIsAutoPlaying(false);
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, highlightSpeed || 1500);
+      return () => clearTimeout(timer);
     }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isAutoPlaying, currentIndex, isSpeechEnabled, highlightSpeed, speak, words, isReading]);
+  }, [isAutoPlaying, currentIndex, isSpeechEnabled, highlightSpeed, words, speak]);
 
   // Reading Timer
   useEffect(() => {
