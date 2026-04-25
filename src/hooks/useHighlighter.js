@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 
-export function useHighlighter(tokens, settings) {
+export function useHighlighter(tokens, settings, selectedVoice) {
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [completed, setCompleted] = useState(false);
@@ -35,10 +35,8 @@ export function useHighlighter(tokens, settings) {
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
     
-    if (settings.speechVoice) {
-      const voices = window.speechSynthesis.getVoices();
-      const selectedVoice = voices.find(v => v.name === settings.speechVoice);
-      if (selectedVoice) utterance.voice = selectedVoice;
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
     }
 
     utterance.onend = () => {

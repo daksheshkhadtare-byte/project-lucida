@@ -30,6 +30,7 @@ function App() {
   const [tokens, setTokens] = useState([]);
   const [isImmersion, setIsImmersion] = useState(false);
   const [toast, setToast] = useState(null);
+  const [selectedVoice, setSelectedVoice] = useState(null);
   
   const toastTimeoutRef = useRef(null);
 
@@ -39,7 +40,7 @@ function App() {
     toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
   };
 
-  const highlighter = useHighlighter(tokens, settings);
+  const highlighter = useHighlighter(tokens, settings, selectedVoice);
 
   useEffect(() => {
     applySettings(settings);
@@ -101,6 +102,8 @@ function App() {
           presets={presets}
           setPresets={setPresets}
           showToast={showToast}
+          selectedVoice={selectedVoice}
+          setSelectedVoice={setSelectedVoice}
         />
         <ReadingPane 
           tokens={tokens}

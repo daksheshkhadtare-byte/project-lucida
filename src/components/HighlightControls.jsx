@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export default function HighlightControls({ highlighter, settings, setSetting }) {
+export default function HighlightControls({ highlighter, settings, setSetting, selectedVoice, setSelectedVoice }) {
   const {
     currentIndex, isAutoPlaying, completed,
     next, prev, toggleAutoPlay, totalValidTokens
@@ -17,6 +17,11 @@ export default function HighlightControls({ highlighter, settings, setSetting })
       if (!settings.speechVoice && englishVoices.length > 0) {
         setSetting('speechVoice', englishVoices[0].name);
       }
+      
+      if (!selectedVoice && englishVoices.length > 0) {
+        const initialVoice = englishVoices.find(v => v.name === settings.speechVoice) || englishVoices[0];
+        setSelectedVoice(initialVoice);
+      }
     };
     
     // Call once in case they are already loaded
@@ -27,6 +32,16 @@ export default function HighlightControls({ highlighter, settings, setSetting })
       window.speechSynthesis.onvoiceschanged = null;
     };
   }, [settings.speechVoice, setSetting]);
+
+  const handleVoiceChange = (e) => {
+    const selectedVoiceName = e.target.value;
+    setSetting('speechVoice', selectedVoiceName);
+    const newVoice = voices.find(v => v.name === selectedVoiceName);
+    setSelectedVoice(newVoice);
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  };
 
   const progress = totalValidTokens > 0 ? ((currentIndex + 1) / totalValidTokens) * 100 : 0;
 
@@ -122,7 +137,7 @@ export default function HighlightControls({ highlighter, settings, setSetting })
               <label className="slider-label" style={{ display: 'block', marginBottom: '5px' }}>Voice</label>
               <select 
                 value={settings.speechVoice || ''} 
-                onChange={(e) => setSetting('speechVoice', e.target.value)}
+                onChange={handleVoiceChange}
                 style={{
                   width: '100%', padding: '8px', background: '#0f0f1a', color: '#e2e2f0', 
                   border: '1px solid #2a2a4a', borderRadius: '4px', fontFamily: 'inherit'

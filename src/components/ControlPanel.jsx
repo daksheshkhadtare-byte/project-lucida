@@ -16,7 +16,9 @@ export default function ControlPanel({
   highlighter,
   presets,
   setPresets,
-  showToast
+  showToast,
+  selectedVoice,
+  setSelectedVoice
 }) {
   const [showBanner, setShowBanner] = useState(presets.length > 0);
 
@@ -64,7 +66,7 @@ export default function ControlPanel({
       <FontSelector currentFont={settings.fontFace} setSetting={setSetting} />
       <SliderGroup settings={settings} setSetting={setSetting} setSettings={setSettings} showToast={showToast} />
       <BackgroundPalette currentBg={settings.bgTint} setSetting={setSetting} />
-      <HighlightControls highlighter={highlighter} settings={settings} setSetting={setSetting} />
+      <HighlightControls highlighter={highlighter} settings={settings} setSetting={setSetting} selectedVoice={selectedVoice} setSelectedVoice={setSelectedVoice} />
       <ReadingStats highlighter={highlighter} />
       
       <div className="card" style={{ marginBottom: '16px' }}>
