@@ -1,27 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 
-export default function HighlightControls({ highlighter, settings, setSetting }) {
+export default function HighlightControls({ highlighter, settings, setSetting, speechControls }) {
   const {
     currentIndex, currentWord, isAutoPlaying, completed,
     next, prev, toggleAutoPlay, totalValidTokens
   } = highlighter;
 
-  const [speechOn, setSpeechOn] = useState(false);
-  const [speechRate, setSpeechRate] = useState(0.9);
-
-  const speak = (word) => {
-    try {
-      window.speechSynthesis.cancel();
-      const msg = new SpeechSynthesisUtterance(word);
-      msg.rate = speechRate;
-      msg.lang = 'en-US';
-      window.speechSynthesis.speak(msg);
-    } catch(e) {}
-  };
-
-  useEffect(() => {
-    if (speechOn && currentWord) speak(currentWord);
-  }, [currentIndex, speechOn]);
+  const {
+    isSpeechEnabled,
+    toggleSpeech,
+    speechRate,
+    setSpeechRate,
+    speechPitch,
+    setSpeechPitch,
+    speechVolume,
+    setSpeechVolume,
+    availableVoices,
+    selectedVoiceName,
+    setSelectedVoiceName,
+    isSpeaking,
+    stopSpeaking
+  } = speechControls || {};
 
   const progress = totalValidTokens > 0 ? ((currentIndex + 1) / totalValidTokens) * 100 : 0;
   const speedProgress = (((settings.highlightSpeed ?? 1500) - 500) / (4000 - 500)) * 100;
@@ -74,44 +73,138 @@ export default function HighlightControls({ highlighter, settings, setSetting })
           </>
         )}
 
-        <div style={{marginTop:'16px', borderTop:'1px solid #2a2a4a', paddingTop:'16px'}}>
-          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px'}}>
-            <span style={{color:'#e2e2f0', fontSize:'14px'}}>🔊 Speak Words Aloud</span>
-            <label style={{position:'relative', display:'inline-block', width:'44px', height:'24px'}}>
+        {/* SPEECH SECTION */}
+        <div className="speech-section">
+          {/* Toggle Row */}
+          <div className="speech-toggle-row">
+            <div className="speech-label">
+              <span className={`speaker-icon ${isSpeaking ? 'speaking' : ''}`}>
+                🔊
+              </span>
+              <div>
+                <span className="speech-title">Speak Words Aloud</span>
+                <span className="speech-subtitle">
+                  {isSpeechEnabled
+                    ? isSpeaking ? 'Speaking...' : 'Ready'
+                    : 'Off'}
+                </span>
+              </div>
+            </div>
+            <label className="toggle-switch">
               <input
                 type="checkbox"
-                checked={speechOn}
-                onChange={(e) => {
-                  window.speechSynthesis.cancel();
-                  setSpeechOn(e.target.checked);
-                }}
-                style={{opacity:0, width:0, height:0}}
+                checked={isSpeechEnabled}
+                onChange={(e) => toggleSpeech(e.target.checked)}
+                aria-label="Toggle speech"
               />
-              <span style={{
-                position:'absolute', cursor:'pointer', top:0, left:0, right:0, bottom:0,
-                backgroundColor: speechOn ? '#7c6af7' : '#2a2a4a',
-                borderRadius:'24px', transition:'0.3s'
-              }}>
-                <span style={{
-                  position:'absolute', height:'18px', width:'18px', left: speechOn ? '23px' : '3px',
-                  bottom:'3px', backgroundColor:'white', borderRadius:'50%', transition:'0.3s'
-                }}/>
+              <span className="toggle-track">
+                <span className="toggle-thumb"/>
               </span>
             </label>
           </div>
-          {speechOn && (
-            <div>
-              <div style={{display:'flex', justifyContent:'space-between', marginBottom:'6px'}}>
-                <span style={{color:'#a0a0c0', fontSize:'13px'}}>Speech Rate</span>
-                <span style={{color:'#e2e2f0', fontSize:'13px'}}>{speechRate}x</span>
+
+          {/* Speech Controls - only show when enabled */}
+          {isSpeechEnabled && (
+            <div className="speech-controls">
+
+              {/* Voice Selector */}
+              {availableVoices && availableVoices.length > 0 && (
+                <div className="speech-control-row">
+                  <label className="speech-control-label">Voice</label>
+                  <select
+                    value={selectedVoiceName}
+                    onChange={(e) => {
+                      stopSpeaking();
+                      setSelectedVoiceName(e.target.value);
+                    }}
+                    className="voice-select"
+                    aria-label="Select voice"
+                  >
+                    {availableVoices.map(voice => (
+                      <option key={voice.name} value={voice.name}>
+                        {voice.name.replace('Microsoft ', '').replace(' Online (Natural)', ' ✨')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Speech Rate */}
+              <div className="speech-control-row">
+                <div className="speech-slider-header">
+                  <label className="speech-control-label">Speed</label>
+                  <span className="speech-control-value">{speechRate}x</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="1.5"
+                  step="0.05"
+                  value={speechRate}
+                  onChange={(e) => {
+                    stopSpeaking();
+                    setSpeechRate(parseFloat(e.target.value));
+                  }}
+                  className="custom-slider"
+                  aria-label="Speech rate"
+                />
+                <div className="speech-slider-labels">
+                  <span>Slower</span>
+                  <span>Faster</span>
+                </div>
               </div>
-              <input
-                type="range"
-                min="0.5" max="1.5" step="0.1"
-                value={speechRate}
-                onChange={(e) => setSpeechRate(parseFloat(e.target.value))}
-                style={{width:'100%'}}
-              />
+
+              {/* Pitch */}
+              <div className="speech-control-row">
+                <div className="speech-slider-header">
+                  <label className="speech-control-label">Pitch</label>
+                  <span className="speech-control-value">{speechPitch}x</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="1.5"
+                  step="0.1"
+                  value={speechPitch}
+                  onChange={(e) => {
+                    stopSpeaking();
+                    setSpeechPitch(parseFloat(e.target.value));
+                  }}
+                  className="custom-slider"
+                  aria-label="Speech pitch"
+                />
+              </div>
+
+              {/* Volume */}
+              <div className="speech-control-row">
+                <div className="speech-slider-header">
+                  <label className="speech-control-label">Volume</label>
+                  <span className="speech-control-value">
+                    {Math.round(speechVolume * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={speechVolume}
+                  onChange={(e) => setSpeechVolume(parseFloat(e.target.value))}
+                  className="custom-slider"
+                  aria-label="Speech volume"
+                />
+              </div>
+
+              {/* Sync Mode Info */}
+              <div className="speech-sync-info">
+                <span className="sync-icon">⚡</span>
+                <span>
+                  {isAutoPlaying
+                    ? 'Auto-advance synced to speech — next word advances after speaking'
+                    : 'Start auto-advance to enable speech sync'}
+                </span>
+              </div>
+
             </div>
           )}
         </div>

@@ -4,6 +4,7 @@ import ControlPanel from './components/ControlPanel';
 import ReadingPane from './components/ReadingPane';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useHighlighter } from './hooks/useHighlighter';
+import { useSpeech } from './hooks/useSpeech';
 import { applySettings } from './utils/cssProperties';
 import OnboardingTour from './components/OnboardingTour';
 
@@ -33,13 +34,15 @@ function App() {
   
   const toastTimeoutRef = useRef(null);
 
+  const speechControls = useSpeech();
+
   const showToast = (message) => {
     setToast(message);
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
   };
 
-  const highlighter = useHighlighter(tokens, settings);
+  const highlighter = useHighlighter(tokens, settings, speechControls.speak, speechControls.isSpeechEnabled);
 
   useEffect(() => {
     applySettings(settings);
@@ -101,6 +104,7 @@ function App() {
           presets={presets}
           setPresets={setPresets}
           showToast={showToast}
+          speechControls={speechControls}
         />
         <ReadingPane 
           tokens={tokens}
