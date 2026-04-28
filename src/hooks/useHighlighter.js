@@ -1,142 +1,110 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
-export function useHighlighter(tokens, settings, speak, isSpeechEnabled, speechControls = {}) {
-  const [currentIndex, setCurrentIndex] = useState(-1);
+export const useHighlighter = ({ words = [], initialSpeed = 1500 }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
-  const [completed, setCompleted] = useState(false);
-  
-  // Timer states
-  const [wordsRead, setWordsRead] = useState(0);
-  const [timeElapsed, setTimeElapsed] = useState(0);
-  const [isReading, setIsReading] = useState(false);
+  const [highlightSpeed, setHighlightSpeed] = useState(initialSpeed);
 
-  const highlightSpeed = settings.highlightSpeed ?? 1500;
+  const isPlayingRef = useRef(false);
+  const speedRef = useRef(initialSpeed);
+  const indexRef = useRef(0);
+  const wordsRef = useRef(words);
+  const timerRef = useRef(null);
 
-  const words = tokens.filter(t => !t.isParagraph);
-  const validTokens = words; // for backwards compatibility in the file
-  
-  const currentWord = currentIndex >= 0 && currentIndex < words.length ? words[currentIndex].word : null;
+  // Keep refs synced
+  useEffect(() => { wordsRef.current = words; }, [words]);
+  useEffect(() => { speedRef.current = highlightSpeed; }, [highlightSpeed]);
+  useEffect(() => { indexRef.current = currentIndex; }, [currentIndex]);
 
-  const { speechRate, speechPitch, speechVolume, selectedVoiceName } = speechControls;
-
-  // 1) Pure Timer Auto-Advance
-  useEffect(() => {
-    if (!isAutoPlaying || !words || words.length === 0) return;
-
-    const timer = setTimeout(() => {
-      setCurrentIndex(prev => {
-        if (prev >= words.length - 1) {
-          setIsAutoPlaying(false);
-          return prev;
-        }
-        return prev + 1;
-      });
-    }, highlightSpeed || 1500);
-
-    return () => clearTimeout(timer);
-
-  }, [isAutoPlaying, currentIndex, highlightSpeed, words]);
-
-  // 2) Independent Speech Effect
-  useEffect(() => {
-    if (!isSpeechEnabled || !words || words.length === 0) return;
-    const currentWordToSpeak = words[currentIndex]?.word;
-    if (!currentWordToSpeak || currentWordToSpeak === '\n\n') return;
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(currentWordToSpeak);
-    utterance.rate = speechRate || 0.85;
-    utterance.pitch = speechPitch || 1.0;
-    utterance.volume = speechVolume || 1.0;
-
-    if (selectedVoiceName) {
-      const voices = window.speechSynthesis.getVoices();
-      const voice = voices.find(v => v.name === selectedVoiceName);
-      if (voice) utterance.voice = voice;
+  const stopTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
+  }, []);
 
-    setTimeout(() => {
-      window.speechSynthesis.speak(utterance);
-    }, 50);
+  const startTimer = useCallback(() => {
+    stopTimer();
+    isPlayingRef.current = true;
+    setIsAutoPlaying(true);
 
-    return () => {
-      window.speechSynthesis.cancel();
-    };
-  }, [currentIndex, isSpeechEnabled, words, speechRate, speechPitch, speechVolume, selectedVoiceName]);
+    timerRef.current = setInterval(() => {
+      const nextIndex = indexRef.current + 1;
+      const total = wordsRef.current.length;
+      if (nextIndex >= total) {
+        stopTimer();
+        isPlayingRef.current = false;
+        setIsAutoPlaying(false);
+        return;
+      }
+      indexRef.current = nextIndex;
+      setCurrentIndex(nextIndex);
+    }, speedRef.current);
+  }, [stopTimer]);
 
-  // Reading Timer
-  useEffect(() => {
-    let timer = null;
-    if (isReading) {
-      timer = setInterval(() => {
-        setTimeElapsed(prev => prev + 1);
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [isReading]);
-
-  // Update words read when index changes
-  useEffect(() => {
-    if (currentIndex >= 0) {
-      setWordsRead(prev => Math.max(prev, currentIndex + 1));
-      if (!isReading && !completed && isAutoPlaying) setIsReading(true);
-    }
-  }, [currentIndex, isReading, completed, isAutoPlaying]);
-
-  const next = () => {
-    if (currentIndex < words.length - 1) {
-      setCurrentIndex(prev => prev + 1);
-      setCompleted(false);
-      if (!isReading) setIsReading(true);
-    }
-  };
-
-  const prev = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(prev => prev - 1);
-      setCompleted(false);
-    } else {
-      setCurrentIndex(-1);
-    }
-  };
-
-  const jumpTo = (index) => {
-    setCurrentIndex(index);
-    setCompleted(false);
-    if (!isReading) setIsReading(true);
-  };
-
-  const toggleAutoPlay = () => {
-    if (currentIndex >= words.length - 1) {
-      setCurrentIndex(0);
-      setCompleted(false);
-    }
-    setIsAutoPlaying(!isAutoPlaying);
-  };
-  
-  const resetStats = () => {
-    setWordsRead(0);
-    setTimeElapsed(0);
-    setIsReading(false);
-    setCurrentIndex(-1);
+  const stopAuto = useCallback(() => {
+    stopTimer();
+    isPlayingRef.current = false;
     setIsAutoPlaying(false);
-    setCompleted(false);
-  };
+  }, [stopTimer]);
+
+  const updateSpeed = useCallback((newSpeed) => {
+    speedRef.current = newSpeed;
+    setHighlightSpeed(newSpeed);
+    // If currently playing, restart timer with new speed immediately
+    if (isPlayingRef.current) {
+      stopTimer();
+      timerRef.current = setInterval(() => {
+        const nextIndex = indexRef.current + 1;
+        const total = wordsRef.current.length;
+        if (nextIndex >= total) {
+          stopTimer();
+          isPlayingRef.current = false;
+          setIsAutoPlaying(false);
+          return;
+        }
+        indexRef.current = nextIndex;
+        setCurrentIndex(nextIndex);
+      }, newSpeed);
+    }
+  }, [stopTimer]);
+
+  const goNext = useCallback(() => {
+    const next = Math.min(indexRef.current + 1, wordsRef.current.length - 1);
+    indexRef.current = next;
+    setCurrentIndex(next);
+  }, []);
+
+  const goPrev = useCallback(() => {
+    const prev = Math.max(indexRef.current - 1, 0);
+    indexRef.current = prev;
+    setCurrentIndex(prev);
+  }, []);
+
+  const jumpTo = useCallback((index) => {
+    indexRef.current = index;
+    setCurrentIndex(index);
+  }, []);
+
+  const reset = useCallback(() => {
+    stopAuto();
+    indexRef.current = 0;
+    setCurrentIndex(0);
+  }, [stopAuto]);
+
+  // Cleanup on unmount
+  useEffect(() => () => stopTimer(), [stopTimer]);
 
   return {
     currentIndex,
-    currentWord,
     isAutoPlaying,
-    completed,
-    next,
-    prev,
+    highlightSpeed,
+    startAuto: startTimer,
+    stopAuto,
+    updateSpeed,
+    goNext,
+    goPrev,
     jumpTo,
-    toggleAutoPlay,
-    setIsAutoPlaying,
-    totalValidTokens: words.length,
-    wordsRead,
-    timeElapsed,
-    resetStats
+    reset,
   };
-}
+};

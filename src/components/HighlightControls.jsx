@@ -1,26 +1,16 @@
 import React from 'react';
 
-export default function HighlightControls({ highlighter, settings, setSetting, speechControls }) {
+export default function HighlightControls({ highlighter, settings, setSetting, speechControls: speech }) {
   const {
-    currentIndex, currentWord, isAutoPlaying, completed,
-    next, prev, toggleAutoPlay, totalValidTokens
+    currentIndex, isAutoPlaying, goNext, goPrev,
+    startAuto, stopAuto, updateSpeed
   } = highlighter;
+  
+  const completed = highlighter.currentIndex >= (highlighter.totalValidTokens - 1) && highlighter.totalValidTokens > 0;
+  const totalValidTokens = highlighter.totalValidTokens || 0;
 
-  const {
-    isSpeechEnabled,
-    toggleSpeech,
-    speechRate,
-    setSpeechRate,
-    speechPitch,
-    setSpeechPitch,
-    speechVolume,
-    setSpeechVolume,
-    availableVoices,
-    selectedVoiceName,
-    setSelectedVoiceName,
-    isSpeaking,
-    stopSpeaking
-  } = speechControls || {};
+  const { isEnabled, toggle, rate, setRate, volume, setVolume,
+          voices, selectedVoiceName, changeVoice, isSpeaking } = speech || {};
 
   const progress = totalValidTokens > 0 ? ((currentIndex + 1) / totalValidTokens) * 100 : 0;
   const speedProgress = (((settings.highlightSpeed ?? 1500) - 500) / (4000 - 500)) * 100;
@@ -32,8 +22,8 @@ export default function HighlightControls({ highlighter, settings, setSetting, s
       
       <div className="highlight-controls">
         <div className="highlight-row">
-          <button className="secondary" onClick={prev}>&larr; Prev</button>
-          <button className="secondary" onClick={next}>Next &rarr;</button>
+          <button className="secondary" onClick={goPrev}>&larr; Prev</button>
+          <button className="secondary" onClick={goNext}>Next &rarr;</button>
         </div>
 
         <div className="toggle-container" style={{ marginTop: '10px' }}>
@@ -42,8 +32,13 @@ export default function HighlightControls({ highlighter, settings, setSetting, s
               type="checkbox" 
               checked={settings.autoAdvance} 
               onChange={(e) => {
-                setSetting('autoAdvance', e.target.checked);
-                if (!e.target.checked && isAutoPlaying) toggleAutoPlay();
+                const isOn = e.target.checked;
+                setSetting('autoAdvance', isOn);
+                if (isOn) {
+                  startAuto();
+                } else {
+                  stopAuto();
+                }
               }} 
             />
             <span className="toggle-slider"></span>
@@ -61,13 +56,17 @@ export default function HighlightControls({ highlighter, settings, setSetting, s
                 id="speed"
                 type="range" min="500" max="4000" step="100" 
                 value={settings.highlightSpeed ?? 1500} 
-                onChange={(e) => setSetting('highlightSpeed', parseInt(e.target.value))}
+                onChange={(e) => {
+                  const newSpeed = parseInt(e.target.value);
+                  setSetting('highlightSpeed', newSpeed);
+                  updateSpeed(newSpeed);
+                }}
                 style={{ background: highlightSpeedBg }}
                 aria-label="Highlight Speed slider"
               />
             </div>
             
-            <button onClick={toggleAutoPlay}>
+            <button onClick={() => isAutoPlaying ? stopAuto() : startAuto()}>
               {isAutoPlaying ? 'Pause Auto' : completed ? 'Restart Auto' : 'Start / Resume Auto'}
             </button>
           </>
@@ -93,8 +92,8 @@ export default function HighlightControls({ highlighter, settings, setSetting, s
             <label className="toggle-switch">
               <input
                 type="checkbox"
-                checked={isSpeechEnabled}
-                onChange={(e) => toggleSpeech(e.target.checked)}
+                checked={isEnabled}
+                onChange={(e) => toggle(e.target.checked)}
                 aria-label="Toggle speech"
               />
               <span className="toggle-slider"></span>
@@ -102,23 +101,22 @@ export default function HighlightControls({ highlighter, settings, setSetting, s
           </div>
 
           {/* Speech Controls - only show when enabled */}
-          {isSpeechEnabled && (
+          {isEnabled && (
             <div className="speech-controls">
 
               {/* Voice Selector */}
-              {availableVoices && availableVoices.length > 0 && (
+              {voices && voices.length > 0 && (
                 <div className="speech-control-row">
                   <label className="speech-control-label">Voice</label>
                   <select
                     value={selectedVoiceName}
                     onChange={(e) => {
-                      stopSpeaking();
-                      setSelectedVoiceName(e.target.value);
+                      changeVoice(e.target.value);
                     }}
                     className="voice-select"
                     aria-label="Select voice"
                   >
-                    {availableVoices.map(voice => (
+                    {voices.map(voice => (
                       <option key={voice.name} value={voice.name}>
                         {voice.name.replace('Microsoft ', '').replace(' Online (Natural)', ' ✨')}
                       </option>
@@ -131,17 +129,16 @@ export default function HighlightControls({ highlighter, settings, setSetting, s
               <div className="speech-control-row">
                 <div className="speech-slider-header">
                   <label className="speech-control-label">Speed</label>
-                  <span className="speech-control-value">{speechRate}x</span>
+                  <span className="speech-control-value">{rate}x</span>
                 </div>
                 <input
                   type="range"
                   min="0.5"
                   max="1.5"
                   step="0.05"
-                  value={speechRate}
+                  value={rate}
                   onChange={(e) => {
-                    stopSpeaking();
-                    setSpeechRate(parseFloat(e.target.value));
+                    setRate(parseFloat(e.target.value));
                   }}
                   className="custom-slider"
                   aria-label="Speech rate"
@@ -152,33 +149,14 @@ export default function HighlightControls({ highlighter, settings, setSetting, s
                 </div>
               </div>
 
-              {/* Pitch */}
-              <div className="speech-control-row">
-                <div className="speech-slider-header">
-                  <label className="speech-control-label">Pitch</label>
-                  <span className="speech-control-value">{speechPitch}x</span>
-                </div>
-                <input
-                  type="range"
-                  min="0.5"
-                  max="1.5"
-                  step="0.1"
-                  value={speechPitch}
-                  onChange={(e) => {
-                    stopSpeaking();
-                    setSpeechPitch(parseFloat(e.target.value));
-                  }}
-                  className="custom-slider"
-                  aria-label="Speech pitch"
-                />
-              </div>
+
 
               {/* Volume */}
               <div className="speech-control-row">
                 <div className="speech-slider-header">
                   <label className="speech-control-label">Volume</label>
                   <span className="speech-control-value">
-                    {Math.round(speechVolume * 100)}%
+                    {Math.round(volume * 100)}%
                   </span>
                 </div>
                 <input
@@ -186,8 +164,8 @@ export default function HighlightControls({ highlighter, settings, setSetting, s
                   min="0"
                   max="1"
                   step="0.1"
-                  value={speechVolume}
-                  onChange={(e) => setSpeechVolume(parseFloat(e.target.value))}
+                  value={volume}
+                  onChange={(e) => setVolume(parseFloat(e.target.value))}
                   className="custom-slider"
                   aria-label="Speech volume"
                 />

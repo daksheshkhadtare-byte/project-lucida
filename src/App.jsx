@@ -34,7 +34,7 @@ function App() {
   
   const toastTimeoutRef = useRef(null);
 
-  const speechControls = useSpeech();
+  const speech = useSpeech();
 
   const showToast = (message) => {
     setToast(message);
@@ -42,7 +42,37 @@ function App() {
     toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
   };
 
-  const highlighter = useHighlighter(tokens, settings, speechControls.speak, speechControls.isSpeechEnabled, speechControls);
+  const baseHighlighter = useHighlighter({ words: tokens, initialSpeed: settings.highlightSpeed || 1500 });
+  
+  const highlighter = {
+    ...baseHighlighter,
+    next: baseHighlighter.goNext,
+    prev: baseHighlighter.goPrev,
+    toggleAutoPlay: () => baseHighlighter.isAutoPlaying ? baseHighlighter.stopAuto() : baseHighlighter.startAuto(),
+    totalValidTokens: tokens.length,
+    completed: baseHighlighter.currentIndex >= tokens.length - 1 && tokens.length > 0,
+    resetStats: () => baseHighlighter.reset()
+  };
+
+  useEffect(() => {
+    if (!tokens || tokens.length === 0) return;
+    const currentWord = tokens[baseHighlighter.currentIndex];
+    if (currentWord && currentWord.word) {
+      speech.speak(currentWord.word);
+    }
+  }, [baseHighlighter.currentIndex]);
+
+  useEffect(() => {
+    // Wake up Edge's audio context on first user interaction
+    const wake = () => {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel(); // clears any stale state
+      }
+      document.removeEventListener('click', wake);
+    };
+    document.addEventListener('click', wake);
+    return () => document.removeEventListener('click', wake);
+  }, []);
 
   useEffect(() => {
     applySettings(settings);
@@ -104,7 +134,7 @@ function App() {
           presets={presets}
           setPresets={setPresets}
           showToast={showToast}
-          speechControls={speechControls}
+          speechControls={speech}
         />
         <ReadingPane 
           tokens={tokens}

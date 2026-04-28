@@ -1,144 +1,124 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 export const useSpeech = () => {
-  const [isSpeechEnabled, setIsSpeechEnabled] = useState(false);
-  const [speechRate, setSpeechRate] = useState(0.85);
-  const [speechPitch, setSpeechPitch] = useState(1.0);
-  const [speechVolume, setSpeechVolume] = useState(1.0);
-  const [availableVoices, setAvailableVoices] = useState([]);
+  const [isEnabled, setIsEnabled] = useState(false);
+  const [rate, setRate] = useState(0.9);
+  const [volume, setVolume] = useState(1.0);
+  const [voices, setVoices] = useState([]);
   const [selectedVoiceName, setSelectedVoiceName] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const utteranceRef = useRef(null);
-  const isSpeechEnabledRef = useRef(false);
 
-  // Keep ref in sync with state
-  useEffect(() => {
-    isSpeechEnabledRef.current = isSpeechEnabled;
-  }, [isSpeechEnabled]);
+  const isEnabledRef = useRef(false);
+  const rateRef = useRef(0.9);
+  const volumeRef = useRef(1.0);
+  const selectedVoiceNameRef = useRef('');
+  const voicesRef = useRef([]);
 
-  // Load voices safely
+  useEffect(() => { isEnabledRef.current = isEnabled; }, [isEnabled]);
+  useEffect(() => { rateRef.current = rate; }, [rate]);
+  useEffect(() => { volumeRef.current = volume; }, [volume]);
+  useEffect(() => { selectedVoiceNameRef.current = selectedVoiceName; }, [selectedVoiceName]);
+  useEffect(() => { voicesRef.current = voices; }, [voices]);
+
+  // Load voices — Edge needs the onvoiceschanged event
   useEffect(() => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
     const loadVoices = () => {
-      const voices = window.speechSynthesis.getVoices();
-      const englishVoices = voices.filter(v =>
-        v.lang.startsWith('en')
-      );
-      setAvailableVoices(englishVoices);
-      if (englishVoices.length > 0 && !selectedVoiceName) {
-        // Prefer natural/online voices
-        const preferred = englishVoices.find(v =>
-          v.name.includes('Natural') ||
-          v.name.includes('Online') ||
-          v.name.includes('Joanne') ||
-          v.name.includes('Samantha')
-        );
-        setSelectedVoiceName(preferred?.name || englishVoices[0].name);
+      const all = window.speechSynthesis.getVoices();
+      const english = all.filter(v => v.lang && v.lang.startsWith('en'));
+      if (english.length === 0) return;
+      voicesRef.current = english;
+      setVoices(english);
+      if (!selectedVoiceNameRef.current) {
+        const preferred = english.find(v =>
+          v.name.includes('David') ||
+          v.name.includes('Zira') ||
+          v.name.includes('Mark') ||
+          v.name.includes('Natural')
+        ) || english[0];
+        selectedVoiceNameRef.current = preferred.name;
+        setSelectedVoiceName(preferred.name);
       }
     };
 
+    // Try immediately and also on voiceschanged (needed for Edge/Chrome)
     loadVoices();
     window.speechSynthesis.onvoiceschanged = loadVoices;
 
+    // Edge sometimes needs a small delay
+    const t = setTimeout(loadVoices, 500);
+
     return () => {
-      if (window.speechSynthesis) {
-        window.speechSynthesis.onvoiceschanged = null;
-      }
+      clearTimeout(t);
+      window.speechSynthesis.onvoiceschanged = null;
     };
   }, []);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
     };
   }, []);
 
-  const speak = useCallback((word, onComplete) => {
-    if (!isSpeechEnabledRef.current) {
-      onComplete?.();
-      return;
-    }
-    if (!window.speechSynthesis || !word || word === '\n\n') {
-      onComplete?.();
-      return;
-    }
+  const speak = useCallback((word) => {
+    if (!isEnabledRef.current) return;
+    if (!word || word.trim() === '' || word === '\n\n') return;
+    if (!window.speechSynthesis) return;
 
     try {
+      // Cancel any ongoing speech first
       window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(word.trim());
-
-      // Apply selected voice
-      if (selectedVoiceName && availableVoices.length > 0) {
-        const voice = availableVoices.find(v => v.name === selectedVoiceName);
-        if (voice) utterance.voice = voice;
-      }
-
-      utterance.rate = speechRate;
-      utterance.pitch = speechPitch;
-      utterance.volume = speechVolume;
+      utterance.rate = rateRef.current;
+      utterance.volume = volumeRef.current;
+      utterance.pitch = 1.0;
       utterance.lang = 'en-US';
 
+      const voice = voicesRef.current.find(v => v.name === selectedVoiceNameRef.current);
+      if (voice) utterance.voice = voice;
+
       utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
 
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        onComplete?.();
-      };
-
-      utterance.onerror = (e) => {
-        setIsSpeaking(false);
-        // Only call onComplete if it wasn't manually cancelled
-        if (e.error !== 'interrupted' && e.error !== 'canceled') {
-          onComplete?.();
-        }
-      };
-
-      utteranceRef.current = utterance;
-
-      // Small delay prevents Chrome audio context issues
+      // Edge requires a small setTimeout before speak() call
       setTimeout(() => {
-        if (isSpeechEnabledRef.current && window.speechSynthesis) {
+        if (window.speechSynthesis) {
           window.speechSynthesis.speak(utterance);
         }
-      }, 30);
+      }, 50);
 
-    } catch(e) {
-      console.warn('Speech error:', e);
-      onComplete?.();
+    } catch (err) {
+      console.warn('Speech error (non-fatal):', err);
+      setIsSpeaking(false);
     }
-  }, [speechRate, speechPitch, speechVolume, selectedVoiceName, availableVoices]);
+  }, []);
 
-  const stopSpeaking = useCallback(() => {
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
+  const stop = useCallback(() => {
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
     setIsSpeaking(false);
   }, []);
 
-  const toggleSpeech = useCallback((value) => {
-    if (!value) stopSpeaking();
-    setIsSpeechEnabled(value);
-  }, [stopSpeaking]);
+  const toggle = useCallback((val) => {
+    if (!val) stop();
+    isEnabledRef.current = val;
+    setIsEnabled(val);
+  }, [stop]);
+
+  const changeVoice = useCallback((name) => {
+    stop();
+    selectedVoiceNameRef.current = name;
+    setSelectedVoiceName(name);
+  }, [stop]);
 
   return {
-    isSpeechEnabled,
-    toggleSpeech,
-    speechRate,
-    setSpeechRate,
-    speechPitch,
-    setSpeechPitch,
-    speechVolume,
-    setSpeechVolume,
-    availableVoices,
-    selectedVoiceName,
-    setSelectedVoiceName,
-    isSpeaking,
-    speak,
-    stopSpeaking
+    isEnabled, toggle,
+    rate, setRate,
+    volume, setVolume,
+    voices, selectedVoiceName, changeVoice,
+    isSpeaking, speak, stop,
   };
 };
